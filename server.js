@@ -172,45 +172,6 @@ app.post('/api/gemini-interaction', upload.fields([
     // Initialize the Google GenAI client
     const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY, vertexai: false }); // Use 'ai' and initialize as per example style
 
-    // Parse the response format JSON string
-    const parsedResponseFormat = JSON.parse(req.body.responseFormat);
-
-    // Helper function to map schema types to Type enum members
-    function mapSchemaTypes(schemaPart) {
-      if (typeof schemaPart !== 'object' || schemaPart === null) return schemaPart;
-      
-      const newSchemaPart = { ...schemaPart };
-      
-      // Convert enum values to strings if they are numbers
-      if (Array.isArray(newSchemaPart.enum)) {
-        newSchemaPart.enum = newSchemaPart.enum.map(value =>
-          typeof value === 'number' ? String(value) : value
-        );
-        // If enum is present, API requires the type to be STRING
-        newSchemaPart.type = Type.STRING;
-      }
-      
-      // Only map type if it's a string and not already set by enum logic
-      if (typeof newSchemaPart.type === 'string' && !Array.isArray(newSchemaPart.enum)) {
-        const typeEnum = Type[newSchemaPart.type.toUpperCase()];
-        if (typeEnum !== undefined) newSchemaPart.type = typeEnum;
-        else console.warn('Unknown schema type:', newSchemaPart.type);
-      }
-      
-      if (newSchemaPart.items) newSchemaPart.items = mapSchemaTypes(newSchemaPart.items);
-      
-      if (newSchemaPart.properties) {
-        for (const key in newSchemaPart.properties) {
-          newSchemaPart.properties[key] = mapSchemaTypes(newSchemaPart.properties[key]);
-        }
-      }
-      
-      return newSchemaPart;
-    }
-
-    // Apply the mapping to convert string types to Type enum members
-    const finalResponseSchema = mapSchemaTypes(parsedResponseFormat);
-
     // --- New File Upload Logic based on example ---
     const imageFile = req.files.imageFile[0];
     // Assuming Blob is available globally in your Node.js environment (Node.js >= v18.0.0 or v15.7.0+ with require('buffer').Blob)
@@ -248,7 +209,7 @@ app.post('/api/gemini-interaction', upload.fields([
     console.log(`Gemini file processing successful: ${getFile.name}, state: ${getFile.state}, uri: ${getFile.uri}`);
     // --- End New File Upload Logic ---
 
-    const promptText = "Evaluate the game state and the user's instructions, and return an updated JSON blob of what is going on in the game right now. Here is the user's instructions: " + req.body.userTTSInput;
+    const promptText = "Evaluate the game state and the user's instructions, and return an updated JSON blob of what is going on in the game right now. Here is the user's instructions: " + req.body.userTTSInput + " and here is the required JSON schema for your output (do not deviate from this format or we will all die): " + req.body.responseFormat;
     
     const apiContents = [
       { text: promptText }
@@ -261,19 +222,56 @@ app.post('/api/gemini-interaction', upload.fields([
       console.error('Gemini file URI or mimeType not available after processing. Cannot add to Gemini content.');
       return res.status(500).json({ error: 'File URI or mimeType not available after Gemini processing.' });
     }
+
+    console.log('Preparing to call Gemini for content generation...');
+    console.log('API Contents:', JSON.stringify(apiContents, null, 2));
+
+    console.log('System Instruction:', JSON.stringify({ parts: [{ text: req.body.systemPrompt }] }, null, 2));
     
-    const geminiResponse = await ai.models.generateContent({
-      model: "gemini-2.5-pro-preview-05-06",
+    console.log('Calling Gemini generateContent...');
+    const geminijson = {
+      model: "gemini-2.5-flash-preview-05-20", // "gemini-2.5-pro-preview-05-06",
       contents: apiContents,
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: finalResponseSchema,
-      },
-      systemInstruction: { parts: [{ text: req.body.systemPrompt }] }
-    });
+      config: {responseMimeType: "application/json",
+   systemInstruction: req.body.systemPrompt  }
+    };
+    console.log('Gemini JSON: ', JSON.stringify(geminijson));
+    const geminiResponse = await ai.models.generateContent(geminijson);
+    console.log('Gemini generateContent call successful.');
     
     // Send the response back to the client
-    res.json({ response: geminiResponse.text });
+    const rawText = geminiResponse.text; // Correctly call text() as a method
+    console.log('Raw response from Gemini:', rawText);
+    let jsonString = rawText;
+
+    // Attempt to remove markdown JSON code block fences.
+    // The 'm' flag allows ^ and $ to match start/end of lines across multiline strings,
+    // and [\s\S] matches any character including newlines.
+    const markdownMatch = rawText.match(/^```json\s*([\s\S]*?)\s*```$/m);
+    if (markdownMatch && markdownMatch[1]) {
+        jsonString = markdownMatch[1];
+    }
+    // If no markdown fence is found, jsonString remains rawText.
+    // JSON.parse will then attempt to parse it directly.
+    // This handles cases where Gemini might return plain JSON or an error string.
+
+    try {
+        const parsedJsonResponse = JSON.parse(jsonString);
+        res.json({ response: parsedJsonResponse }); // Send the parsed JSON object
+    } catch (parseError) {
+        console.error('Failed to parse cleaned Gemini response as JSON. Error:', parseError.message);
+        console.error('Original Gemini text:', rawText);
+        console.error('Attempted to parse (after cleaning):', jsonString);
+        // Send a more informative error response to the client
+        res.status(500).json({
+            error: 'Failed to parse Gemini API response as JSON.',
+            details: {
+                message: parseError.message,
+                originalResponse: rawText,
+                processedString: jsonString
+            }
+        });
+    }
     
   } catch (error) {
     console.error('Error processing Gemini API request:', error.message);
