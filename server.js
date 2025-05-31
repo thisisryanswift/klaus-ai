@@ -35,6 +35,42 @@ app.get("/heartbeat", (req, res) => {
   res.send(new Date().toISOString());
 });
 
+app.post("/api/uploadCached", upload.single("uploadedFile"), async (req, res) => {
+    try {
+        // Define paths to your files
+        // __dirname is the directory of the current module (your .js file)
+        const schemaFilePath = path.join(__dirname, 'jsonschema.json');
+        const promptFilePath = path.join(__dirname, 'systemprompt.txt');
+
+        // Read the content of the files
+        // The 'utf8' encoding is important for reading text files correctly.
+        const schemaContent = await fs.readFile(schemaFilePath, 'utf8');
+        const promptContent = await fs.readFile(promptFilePath, 'utf8');
+
+        // Construct the response object
+        // The schemaContent will be a string. If your client expects a parsed JSON object
+        // for the schema, you might need to do JSON.parse(schemaContent) here,
+        // but typically for sending it in a response, a string is fine.
+        const response = {
+            schema: schemaContent,
+            prompt: promptContent,
+        };
+
+        // Return the result to the client
+        res.json(response);
+
+    } catch (error) {
+        console.error("Error reading schema or prompt file:", error);
+        // Send an appropriate error response to the client
+        if (error.code === 'ENOENT') { // ENOENT means "Error NO ENTry" (file not found)
+            res.status(500).json({ error: "Configuration file not found. Please check server setup." });
+        } else {
+            res.status(500).json({ error: "Failed to load configuration for the request." });
+        }
+    }
+});
+
+
 // File upload and Langflow processing endpoint
 app.post("/api/upload", upload.single("uploadedFile"), async (req, res) => {
   if (!req.file) {
@@ -303,8 +339,7 @@ app.post(
       // --- End New File Upload Logic ---
 
       const promptText =
-        "Evaluate the game state and the user's instructions, and return an updated JSON blob of what is going on in the game right now. Here is the user's instructions: " +
-        " and here is the required JSON schema for your output (do not deviate from this format or we will all die): " +
+        "Evaluate the game state in our image, and return an updated JSON blob of what is going on in the game right now. Make sure you have a specific, and accurate parsing of the game state into our json format. Here is the required JSON schema for your output (do not deviate from this format or we will all die): " +
         req.body.responseFormat;
 
       const apiContents = [{ text: promptText }];
@@ -335,7 +370,7 @@ app.post(
         contents: apiContents,
         config: {
           responseMimeType: "application/json",
-          systemInstruction: req.body.systemPrompt,
+          systemInstruction: "IMPORTANT NOTE: WE ARE PLAYING A MODIFIED VERSION OF THE GAME WITH ONLY 3 FLAGS, NOT THE NORMAL 9. ALL OTHER RULES ARE THE SAME." + req.body.systemPrompt,
           temperature: 0
         },
       };
