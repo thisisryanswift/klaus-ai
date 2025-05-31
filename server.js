@@ -1,12 +1,12 @@
-const express = require('express');
-const dotenv = require('dotenv');
-const path = require('path');
-const multer = require('multer');
-const fs = require('fs').promises;
-const os = require('os');
-const { LangflowClient } = require('@datastax/langflow-client');
+const express = require("express");
+const dotenv = require("dotenv");
+const path = require("path");
+const multer = require("multer");
+const fs = require("fs").promises;
+const os = require("os");
+const { LangflowClient } = require("@datastax/langflow-client");
 const { GoogleGenAI, Type, createPartFromUri } = require("@google/genai");
-const wav = require('wav');
+const wav = require("wav");
 const cors = require("cors");
 
 // Load environment variables from .env file
@@ -188,257 +188,320 @@ app.post("/api/upload", upload.single("uploadedFile"), async (req, res) => {
 
 // Helper function to save WAV file
 async function saveWaveFile(
-   filename,
-   pcmData,
-   channels = 1,
-   rate = 24000,
-   sampleWidth = 2,
+  filename,
+  pcmData,
+  channels = 1,
+  rate = 24000,
+  sampleWidth = 2
 ) {
-   return new Promise((resolve, reject) => {
-      const writer = new wav.FileWriter(filename, {
-            channels,
-            sampleRate: rate,
-            bitDepth: sampleWidth * 8,
-      });
+  return new Promise((resolve, reject) => {
+    const writer = new wav.FileWriter(filename, {
+      channels,
+      sampleRate: rate,
+      bitDepth: sampleWidth * 8,
+    });
 
-      writer.on('finish', resolve);
-      writer.on('error', reject);
+    writer.on("finish", resolve);
+    writer.on("error", reject);
 
-      writer.write(pcmData);
-      writer.end();
-   });
+    writer.write(pcmData);
+    writer.end();
+  });
 }
 
 // Gemini API interaction endpoint
-app.post('/api/gemini-interaction', upload.fields([
-  { name: 'imageFile', maxCount: 1 },
-  { name: 'responseFormat', maxCount: 1 },
-  { name: 'systemPrompt', maxCount: 1 },
-  { name: 'userTTSInput', maxCount: 1 }
-]), async (req, res) => {
-  // Check if required fields are present
-  if (!req.files || !req.files.imageFile || !req.files.imageFile[0]) {
-    return res.status(400).json({ error: 'No image file uploaded.' });
-  }
-
-  if (!req.body.responseFormat) {
-    return res.status(400).json({ error: 'Response format is required.' });
-  }
-
-  if (!req.body.systemPrompt) {
-    return res.status(400).json({ error: 'System prompt is required.' });
-  }
-
-  if (!req.body.userTTSInput) {
-    return res.status(400).json({ error: 'User input is required.' });
-  }
-
-  try {
-    // Initialize the Google GenAI client
-    const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY, vertexai: false }); // Use 'ai' and initialize as per example style
-
-    // --- New File Upload Logic based on example ---
-    const imageFile = req.files.imageFile[0];
-    // Assuming Blob is available globally in your Node.js environment (Node.js >= v18.0.0 or v15.7.0+ with require('buffer').Blob)
-    // If not, you might need: const { Blob } = require('buffer');
-    const imageFileBlob = new Blob([imageFile.buffer], { type: imageFile.mimetype });
-
-    console.log(`Uploading file to Gemini: ${imageFile.originalname}, type: ${imageFile.mimetype}`);
-    // Upload the file.
-    const uploadedFile = await ai.files.upload({
-      file: imageFileBlob,
-      config: { // This 'config' is for ai.files.upload
-        displayName: imageFile.originalname,
-      },
-    });
-    console.log(`Gemini file uploaded, name: ${uploadedFile.name}, uri: ${uploadedFile.uri}`);
-
-    // Wait for the file to be processed.
-    let getFile = await ai.files.get({ name: uploadedFile.name });
-    console.log(`Initial Gemini file status: ${getFile.state}`);
-    while (getFile.state === 'PROCESSING') {
-      console.log('Gemini file is still processing, retrying in 5 seconds...');
-      await new Promise(resolve => setTimeout(resolve, 5000)); // Non-blocking delay
-      getFile = await ai.files.get({ name: uploadedFile.name });
-      console.log(`Current Gemini file status: ${getFile.state}`);
+app.post(
+  "/api/gemini-interaction",
+  upload.fields([
+    { name: "imageFile", maxCount: 1 },
+    { name: "responseFormat", maxCount: 1 },
+    { name: "systemPrompt", maxCount: 1 },
+    { name: "userTTSInput", maxCount: 1 },
+  ]),
+  async (req, res) => {
+    // Check if required fields are present
+    if (!req.files || !req.files.imageFile || !req.files.imageFile[0]) {
+      return res.status(400).json({ error: "No image file uploaded." });
     }
 
-    if (getFile.state === 'FAILED') {
-      console.error('Gemini file processing failed:', getFile);
-      return res.status(500).json({ error: 'Gemini file processing failed.', details: getFile });
-    }
-    if (getFile.state !== 'ACTIVE') { // Ensure file is active for use
-        console.error(`Gemini file processing finished with unexpected state: ${getFile.state}`, getFile);
-        return res.status(500).json({ error: `Gemini file processing finished with unexpected state: ${getFile.state}`, details: getFile });
-    }
-    console.log(`Gemini file processing successful: ${getFile.name}, state: ${getFile.state}, uri: ${getFile.uri}`);
-    // --- End New File Upload Logic ---
-
-    const promptText = "Evaluate the game state and the user's instructions, and return an updated JSON blob of what is going on in the game right now. Here is the user's instructions: " + " and here is the required JSON schema for your output (do not deviate from this format or we will all die): " + req.body.responseFormat;
-    
-    const apiContents = [
-      { text: promptText }
-    ];
-
-    if (getFile.uri && getFile.mimeType) {
-      const filePart = createPartFromUri(getFile.uri, getFile.mimeType);
-      apiContents.push(filePart);
-    } else {
-      console.error('Gemini file URI or mimeType not available after processing. Cannot add to Gemini content.');
-      return res.status(500).json({ error: 'File URI or mimeType not available after Gemini processing.' });
+    if (!req.body.responseFormat) {
+      return res.status(400).json({ error: "Response format is required." });
     }
 
-    console.log('Preparing to call Gemini for content generation...');
-   // console.log('API Contents:', JSON.stringify(apiContents, null, 2));
-
-   // console.log('System Instruction:', JSON.stringify({ parts: [{ text: req.body.systemPrompt }] }, null, 2));
-    
-    console.log('Calling Gemini generateContent...');
-    const geminijson = {
-      model: "gemini-2.5-flash-preview-05-20", // "gemini-2.5-pro-preview-05-06",
-      contents: apiContents,
-      config: {responseMimeType: "application/json",
-   systemInstruction: req.body.systemPrompt  }
-    };
-    //console.log('Gemini JSON: ', JSON.stringify(geminijson));
-    const geminiResponse = await ai.models.generateContent(geminijson);
-    console.log('Gemini generateContent call successful.');
-    
-    // Send the response back to the client
-    const rawText = geminiResponse.text; // Correctly call text() as a method
-   // console.log('Raw response from Gemini for game state:', rawText);
-    let jsonString = rawText;
-
-    // Attempt to remove markdown JSON code block fences.
-    // The 'm' flag allows ^ and $ to match start/end of lines across multiline strings,
-    // and [\s\S] matches any character including newlines.
-    const markdownMatch = rawText.match(/^```json\s*([\s\S]*?)\s*```$/m);
-    if (markdownMatch && markdownMatch[1]) {
-        jsonString = markdownMatch[1];
+    if (!req.body.systemPrompt) {
+      return res.status(400).json({ error: "System prompt is required." });
     }
-    // If no markdown fence is found, jsonString remains rawText.
-    // JSON.parse will then attempt to parse it directly.
-    // This handles cases where Gemini might return plain JSON or an error string.
+
+    if (!req.body.userTTSInput) {
+      return res.status(400).json({ error: "User input is required." });
+    }
 
     try {
+      // Initialize the Google GenAI client
+      const ai = new GoogleGenAI({
+        apiKey: process.env.GOOGLE_API_KEY,
+        vertexai: false,
+      }); // Use 'ai' and initialize as per example style
+
+      // --- New File Upload Logic based on example ---
+      const imageFile = req.files.imageFile[0];
+      // Assuming Blob is available globally in your Node.js environment (Node.js >= v18.0.0 or v15.7.0+ with require('buffer').Blob)
+      // If not, you might need: const { Blob } = require('buffer');
+      const imageFileBlob = new Blob([imageFile.buffer], {
+        type: imageFile.mimetype,
+      });
+
+      console.log(
+        `Uploading file to Gemini: ${imageFile.originalname}, type: ${imageFile.mimetype}`
+      );
+      // Upload the file.
+      const uploadedFile = await ai.files.upload({
+        file: imageFileBlob,
+        config: {
+          // This 'config' is for ai.files.upload
+          displayName: imageFile.originalname,
+        },
+      });
+      console.log(
+        `Gemini file uploaded, name: ${uploadedFile.name}, uri: ${uploadedFile.uri}`
+      );
+
+      // Wait for the file to be processed.
+      let getFile = await ai.files.get({ name: uploadedFile.name });
+      console.log(`Initial Gemini file status: ${getFile.state}`);
+      while (getFile.state === "PROCESSING") {
+        console.log(
+          "Gemini file is still processing, retrying in 5 seconds..."
+        );
+        await new Promise((resolve) => setTimeout(resolve, 5000)); // Non-blocking delay
+        getFile = await ai.files.get({ name: uploadedFile.name });
+        console.log(`Current Gemini file status: ${getFile.state}`);
+      }
+
+      if (getFile.state === "FAILED") {
+        console.error("Gemini file processing failed:", getFile);
+        return res
+          .status(500)
+          .json({ error: "Gemini file processing failed.", details: getFile });
+      }
+      if (getFile.state !== "ACTIVE") {
+        // Ensure file is active for use
+        console.error(
+          `Gemini file processing finished with unexpected state: ${getFile.state}`,
+          getFile
+        );
+        return res
+          .status(500)
+          .json({
+            error: `Gemini file processing finished with unexpected state: ${getFile.state}`,
+            details: getFile,
+          });
+      }
+      console.log(
+        `Gemini file processing successful: ${getFile.name}, state: ${getFile.state}, uri: ${getFile.uri}`
+      );
+      // --- End New File Upload Logic ---
+
+      const promptText =
+        "Evaluate the game state and the user's instructions, and return an updated JSON blob of what is going on in the game right now. Here is the user's instructions: " +
+        " and here is the required JSON schema for your output (do not deviate from this format or we will all die): " +
+        req.body.responseFormat;
+
+      const apiContents = [{ text: promptText }];
+
+      if (getFile.uri && getFile.mimeType) {
+        const filePart = createPartFromUri(getFile.uri, getFile.mimeType);
+        apiContents.push(filePart);
+      } else {
+        console.error(
+          "Gemini file URI or mimeType not available after processing. Cannot add to Gemini content."
+        );
+        return res
+          .status(500)
+          .json({
+            error:
+              "File URI or mimeType not available after Gemini processing.",
+          });
+      }
+
+      console.log("Preparing to call Gemini for content generation...");
+      // console.log('API Contents:', JSON.stringify(apiContents, null, 2));
+
+      // console.log('System Instruction:', JSON.stringify({ parts: [{ text: req.body.systemPrompt }] }, null, 2));
+
+      console.log("Calling Gemini generateContent...");
+      const geminijson = {
+        model: "gemini-2.5-flash-preview-05-20", // "gemini-2.5-pro-preview-05-06",
+        contents: apiContents,
+        config: {
+          responseMimeType: "application/json",
+          systemInstruction: req.body.systemPrompt,
+        },
+      };
+      //console.log('Gemini JSON: ', JSON.stringify(geminijson));
+      const geminiResponse = await ai.models.generateContent(geminijson);
+      console.log("Gemini generateContent call successful.");
+
+      // Send the response back to the client
+      const rawText = geminiResponse.text; // Correctly call text() as a method
+      // console.log('Raw response from Gemini for game state:', rawText);
+      let jsonString = rawText;
+
+      // Attempt to remove markdown JSON code block fences.
+      // The 'm' flag allows ^ and $ to match start/end of lines across multiline strings,
+      // and [\s\S] matches any character including newlines.
+      const markdownMatch = rawText.match(/^```json\s*([\s\S]*?)\s*```$/m);
+      if (markdownMatch && markdownMatch[1]) {
+        jsonString = markdownMatch[1];
+      }
+      // If no markdown fence is found, jsonString remains rawText.
+      // JSON.parse will then attempt to parse it directly.
+      // This handles cases where Gemini might return plain JSON or an error string.
+
+      try {
         const parsedJsonResponse = JSON.parse(jsonString);
-       // console.log('Successfully parsed first Gemini response:', parsedJsonResponse);
+        // console.log('Successfully parsed first Gemini response:', parsedJsonResponse);
 
         // --- Step 2: Generate Text Summary ---
-        console.log('Preparing to generate text summary...');
+        console.log("Preparing to generate text summary...");
         // TODO: You might want to customize this prompt further
-        const summaryPromptText = `Based on the following JSON representation of our game state: ${JSON.stringify(parsedJsonResponse, null, 2)}, please provide a concise one sentence strategic recommendation based on the player's request (note that the player you are providing advice for is always Player 1 in the image): ${req.body.userTTSInput}`;
-        console.log('Text summary prompt:', summaryPromptText);
+        const summaryPromptText = `Based on the following JSON representation of our game state: ${JSON.stringify(
+          parsedJsonResponse,
+          null,
+          2
+        )}, please provide a concise one sentence strategic recommendation based on the player's request (note that the player you are providing advice for is always Player 1 in the image): ${
+          req.body.userTTSInput
+        }`;
+        console.log("Text summary prompt:", summaryPromptText);
 
-        console.log('Calling Gemini to generate text summary...');
+        console.log("Calling Gemini to generate text summary...");
         const summaryResponse = await ai.models.generateContent({
-            model: "gemini-2.5-flash-preview-05-20", // Model for text generation
-            contents: summaryPromptText,
-            config: {
-            systemInstruction: req.body.systemPrompt }
+          model: "gemini-2.5-flash-preview-05-20", // Model for text generation
+          contents: summaryPromptText,
+          config: {
+            systemInstruction: req.body.systemPrompt,
+          },
         });
-        console.log('Gemini text summary generation successful.');
+        console.log("Gemini text summary generation successful.");
 
         const generatedSummaryText = "Say cheerfully: " + summaryResponse.text;
-        console.log('Generated text summary:', generatedSummaryText);
+        console.log("Generated text summary:", generatedSummaryText);
 
         if (!generatedSummaryText) {
-            console.error('Gemini did not return text for the summary.');
-            return res.status(500).json({ error: 'Failed to generate text summary from Gemini.' });
+          console.error("Gemini did not return text for the summary.");
+          return res
+            .status(500)
+            .json({ error: "Failed to generate text summary from Gemini." });
         }
 
         // --- Step 3: Generate Audio from Text Summary (TTS) ---
-        console.log('Preparing to generate audio (TTS) for the summary...');
-        
+        console.log("Preparing to generate audio (TTS) for the summary...");
+
         const ttsModel = "gemini-2.5-flash-preview-tts"; // TTS specific model from example
         const ttsContents = [{ parts: [{ text: generatedSummaryText }] }]; // Text to convert to speech
         const ttsGenerationConfig = {
-            responseModalities: ['AUDIO'], // Requesting only audio output
-            speechConfig: {
-                voiceConfig: {
-                    // Using 'Kore' voice from example, you can choose others
-                    prebuiltVoiceConfig: { voiceName: 'Kore' },
-                },
+          responseModalities: ["AUDIO"], // Requesting only audio output
+          speechConfig: {
+            voiceConfig: {
+              // Using 'Kore' voice from example, you can choose others
+              prebuiltVoiceConfig: { voiceName: "Kore" },
             },
+          },
         };
         // System instruction might not be strictly necessary for TTS, but can be included
         // const ttsSystemInstruction = { parts: [{ text: "Synthesize this text clearly." }] };
 
-
-        console.log(`Calling Gemini TTS model ('${ttsModel}') to generate audio...`);
+        console.log(
+          `Calling Gemini TTS model ('${ttsModel}') to generate audio...`
+        );
         const ttsResponse = await ai.models.generateContent({
-            model: ttsModel,
-            contents: ttsContents,
-            config: ttsGenerationConfig,
-            // systemInstruction: ttsSystemInstruction // Optional for TTS
+          model: ttsModel,
+          contents: ttsContents,
+          config: ttsGenerationConfig,
+          // systemInstruction: ttsSystemInstruction // Optional for TTS
         });
-        console.log('Gemini TTS call successful.');
+        console.log("Gemini TTS call successful.");
 
         const audioDataPart = ttsResponse.candidates?.[0]?.content?.parts?.[0];
-        if (!audioDataPart || !audioDataPart.inlineData || !audioDataPart.inlineData.data) {
-            console.error('Gemini TTS response did not contain audio data:', ttsResponse);
-            return res.status(500).json({ error: 'Failed to retrieve audio data from Gemini TTS response.' });
+        if (
+          !audioDataPart ||
+          !audioDataPart.inlineData ||
+          !audioDataPart.inlineData.data
+        ) {
+          console.error(
+            "Gemini TTS response did not contain audio data:",
+            ttsResponse
+          );
+          return res
+            .status(500)
+            .json({
+              error: "Failed to retrieve audio data from Gemini TTS response.",
+            });
         }
-        
+
         const base64AudioData = audioDataPart.inlineData.data;
-        console.log('Successfully retrieved base64 audio data.');
+        console.log("Successfully retrieved base64 audio data.");
         // const audioBuffer = Buffer.from(base64AudioData, 'base64'); // Original comment
 
         let audioUrl = null;
         if (base64AudioData) {
-            try {
-                const audioDir = path.join(__dirname, 'public', 'audio');
-                // Ensure 'public/audio' directory exists. fs.mkdir with recursive:true is idempotent.
-                await fs.mkdir(audioDir, { recursive: true });
-                console.log(`Ensured directory exists or was created: ${audioDir}`);
+          try {
+            const audioDir = path.join(__dirname, "public", "audio");
+            // Ensure 'public/audio' directory exists. fs.mkdir with recursive:true is idempotent.
+            await fs.mkdir(audioDir, { recursive: true });
+            console.log(`Ensured directory exists or was created: ${audioDir}`);
 
-                const audioFileName = `gemini_output_${Date.now()}.wav`;
-                const audioFilePath = path.join(audioDir, audioFileName);
-                const decodedAudioBuffer = Buffer.from(base64AudioData, 'base64');
+            const audioFileName = `gemini_output_${Date.now()}.wav`;
+            const audioFilePath = path.join(audioDir, audioFileName);
+            const decodedAudioBuffer = Buffer.from(base64AudioData, "base64");
 
-                // Use the new saveWaveFile function
-                await saveWaveFile(audioFilePath, decodedAudioBuffer); // Using default 24kHz, 1 channel, 16-bit
-                console.log(`Audio file saved successfully using wav.FileWriter: ${audioFilePath}`);
-                audioUrl = `/audio/${audioFileName}`; // Relative URL for client access via express.static
-            } catch (fileError) {
-                console.error('Error saving audio file:', fileError.message);
-                // audioUrl will remain null, and the client should handle cases where audioUrl is not provided.
-            }
+            // Use the new saveWaveFile function
+            await saveWaveFile(audioFilePath, decodedAudioBuffer); // Using default 24kHz, 1 channel, 16-bit
+            console.log(
+              `Audio file saved successfully using wav.FileWriter: ${audioFilePath}`
+            );
+            audioUrl = `/audio/${audioFileName}`; // Relative URL for client access via express.static
+          } catch (fileError) {
+            console.error("Error saving audio file:", fileError.message);
+            // audioUrl will remain null, and the client should handle cases where audioUrl is not provided.
+          }
         }
 
         // Send text summary and the URL to the audio file (or null if saving failed)
         res.json({
-            textResponse: generatedSummaryText,
-            audioUrl: audioUrl
+          textResponse: generatedSummaryText,
+          audioUrl: audioUrl,
         });
-
-    } catch (parseError) {
-        console.error('Failed to parse cleaned Gemini response as JSON. Error:', parseError.message);
-        console.error('Original Gemini text:', rawText); // rawText is from the first call, ensure context
-        console.error('Attempted to parse (after cleaning):', jsonString);
+      } catch (parseError) {
+        console.error(
+          "Failed to parse cleaned Gemini response as JSON. Error:",
+          parseError.message
+        );
+        console.error("Original Gemini text:", rawText); // rawText is from the first call, ensure context
+        console.error("Attempted to parse (after cleaning):", jsonString);
         // Send a more informative error response to the client
         res.status(500).json({
-            error: 'Failed to parse Gemini API response as JSON.',
-            details: {
-                message: parseError.message,
-                originalResponse: rawText,
-                processedString: jsonString
-            }
+          error: "Failed to parse Gemini API response as JSON.",
+          details: {
+            message: parseError.message,
+            originalResponse: rawText,
+            processedString: jsonString,
+          },
         });
+      }
+    } catch (error) {
+      console.error("Error processing Gemini API request:", error.message);
+
+      // Log the full error object for debugging
+      console.error("Full error object:", error);
+
+      res.status(500).json({
+        error: "Internal server error during Gemini API processing.",
+        details: error.message,
+      });
     }
-    
-  } catch (error) {
-    console.error('Error processing Gemini API request:', error.message);
-    
-    // Log the full error object for debugging
-    console.error('Full error object:', error);
-    
-    res.status(500).json({
-      error: 'Internal server error during Gemini API processing.',
-      details: error.message
-    });
   }
-});
+);
 
 // Start server
 const PORT = process.env.PORT || 3000;
