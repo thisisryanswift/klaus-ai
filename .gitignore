@@ -1,9 +1,9 @@
 # Dependencies
 node_modules/
-
+.DS_Store
 # Environment variables
 .env
-
+public/audio/*.wav
 # Logs
 npm-debug.log*
 yarn-debug.log*

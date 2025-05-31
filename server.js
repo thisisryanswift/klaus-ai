@@ -6,6 +6,7 @@ const fs = require('fs').promises;
 const os = require('os');
 const { LangflowClient } = require('@datastax/langflow-client');
 const { GoogleGenAI, Type, createPartFromUri } = require("@google/genai");
+const wav = require('wav');
 
 // Load environment variables from .env file
 dotenv.config();
@@ -144,6 +145,29 @@ app.post('/api/upload', upload.single('uploadedFile'), async (req, res) => {
     }
 });
 
+// Helper function to save WAV file
+async function saveWaveFile(
+   filename,
+   pcmData,
+   channels = 1,
+   rate = 24000,
+   sampleWidth = 2,
+) {
+   return new Promise((resolve, reject) => {
+      const writer = new wav.FileWriter(filename, {
+            channels,
+            sampleRate: rate,
+            bitDepth: sampleWidth * 8,
+      });
+
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+
+      writer.write(pcmData);
+      writer.end();
+   });
+}
+
 // Gemini API interaction endpoint
 app.post('/api/gemini-interaction', upload.fields([
   { name: 'imageFile', maxCount: 1 },
@@ -262,7 +286,7 @@ app.post('/api/gemini-interaction', upload.fields([
         // --- Step 2: Generate Text Summary ---
         console.log('Preparing to generate text summary...');
         // TODO: You might want to customize this prompt further
-        const summaryPromptText = `Based on the following JSON representation of our game state: ${JSON.stringify(parsedJsonResponse, null, 2)}, please provide a concise one sentence strategic recommendation based on the player's request (note that the player you are providing advice for is always on the bottom of the image): ${req.body.ttsContents}`;
+        const summaryPromptText = `Based on the following JSON representation of our game state: ${JSON.stringify(parsedJsonResponse, null, 2)}, please provide a concise one sentence strategic recommendation based on the player's request (note that the player you are providing advice for is always Player 1 in the image): ${req.body.userTTSInput}`;
         console.log('Text summary prompt:', summaryPromptText);
 
         console.log('Calling Gemini to generate text summary...');
@@ -331,8 +355,9 @@ app.post('/api/gemini-interaction', upload.fields([
                 const audioFilePath = path.join(audioDir, audioFileName);
                 const decodedAudioBuffer = Buffer.from(base64AudioData, 'base64');
 
-                await fs.writeFile(audioFilePath, decodedAudioBuffer);
-                console.log(`Audio file saved successfully: ${audioFilePath}`);
+                // Use the new saveWaveFile function
+                await saveWaveFile(audioFilePath, decodedAudioBuffer); // Using default 24kHz, 1 channel, 16-bit
+                console.log(`Audio file saved successfully using wav.FileWriter: ${audioFilePath}`);
                 audioUrl = `/audio/${audioFileName}`; // Relative URL for client access via express.static
             } catch (fileError) {
                 console.error('Error saving audio file:', fileError.message);
