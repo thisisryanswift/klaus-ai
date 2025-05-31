@@ -1,6 +1,6 @@
 # Klaus.AI
 
-**Klaus.AI is a prototype AI that helps you learn and play new board games.** Using Google Gemini, Klaus parses the PDF rules of a new game and uses a live feed from a camera and microphone to advise the players. Klaus was built as part of the [Hacking Agents Hackathon NYC](https://lu.ma/hacking-agents-hackathon-nyc) hosted by angflow, DigitalOcean, Torc.dev, TwelveLabs, and Twilio.
+**Klaus.AI is a prototype AI that helps you learn and play new board games.** Using Google Gemini, Klaus parses the PDF rules of a new game and uses a live feed from a camera and microphone to advise the players. Klaus was built as part of the [Hacking Agents Hackathon NYC](https://lu.ma/hacking-agents-hackathon-nyc) hosted by DataStax Langflow, DigitalOcean, Torc.dev, TwelveLabs, and Twilio.
 
 <img width="1707" alt="image" src="https://github.com/user-attachments/assets/11304f3e-1364-4574-98aa-e81279673293" />
 
@@ -67,4 +67,4 @@ A unique aspect of Klaus.AI's development was the extensive use of AI for code g
 
 ## Acknowledgements
 
-This project was built as part of the [Hacking Agents Hackathon NYC](https://lu.ma/hacking-agents-hackathon-nyc) (May 2024) and we thank the hosts: angflow, DigitalOcean, Torc.dev, TwelveLabs, and Twilio.
+This project was built as part of the [Hacking Agents Hackathon NYC](https://lu.ma/hacking-agents-hackathon-nyc) (May 2024) and we thank the hosts: DataStax Langflow, DigitalOcean, Torc.dev, TwelveLabs, and Twilio.
