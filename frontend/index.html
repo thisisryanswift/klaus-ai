@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Board Game Strategist</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'pop-blue': '#2D72D9',      // Vibrant Blue
+            'pop-red': '#E63946',       // Strong Red
+            'pop-yellow': '#FFCA3A',    // Sunny Yellow
+            'pop-pink': '#FF69B4',      // Bright Pink
+            'pop-green': '#6A994E',     // Solid Green
+            'pop-black': '#1C1C1C',     // Off-black for text
+            'pop-white': '#FDFDFD',     // Clean off-white for backgrounds
+            'comic-stroke': '#000000',  // Pure black for outlines
+
+            // For button hovers (can be defined more systematically if needed)
+            'red-700': '#C53030',    // Darker red for hover
+            'yellow-500': '#D69E2E', // Darker yellow for hover
+            'green-700': '#2F855A',  // Darker green for hover
+            'blue-700': '#2B6CB0',   // Darker blue for hover
+            'gray-800': '#2D3748',   // Darker gray for hover (for pop-black)
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Bangers', 'cursive'], 
+          },
+          borderColor: theme => ({
+            ...theme('colors'),
+            DEFAULT: theme('colors.gray.300', 'currentColor'),
+            'comic-outline': theme('colors.comic-stroke'),
+          }),
+          boxShadow: {
+            'comic': '4px 4px 0px 0px theme("colors.comic-stroke")',
+            'comic-hover': '6px 6px 0px 0px theme("colors.comic-stroke")',
+            'comic-focus': '0 0 0 3px theme("colors.pop-blue")', // Focus ring
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'wiggle-slow': 'wiggle 5s ease-in-out infinite',
+            'dot-pulse': 'dot-pulse 1.4s infinite ease-in-out',
+            'dot-pulse-delay-1': 'dot-pulse 1.4s infinite 0.2s ease-in-out',
+            'dot-pulse-delay-2': 'dot-pulse 1.4s infinite 0.4s ease-in-out',
+          },
+          keyframes: {
+            pulse: {
+              '0%, 100%': { transform: 'scale(1)' },
+              '50%': { transform: 'scale(1.05)' },
+            },
+            wiggle: {
+              '0%, 100%': { transform: 'rotate(-5deg) scale(1)' },
+              '50%': { transform: 'rotate(5deg) scale(1.05)' },
+            },
+            'dot-pulse': {
+              '0%, 80%, 100%': { opacity: '0' },
+              '40%': { opacity: '1' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Bangers&display=swap" rel="stylesheet">
+<script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.1.0/",
+    "react": "https://esm.sh/react@^19.1.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.0/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-pop-white font-sans">
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

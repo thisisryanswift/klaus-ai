@@ -1,0 +1,9 @@
+{
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "name": "AI Board Game Coach UI",
+  "description": "",
+  "prompt": ""
+}
