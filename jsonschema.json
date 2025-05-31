@@ -1,0 +1,254 @@
+{
+  "type": "object",
+  "properties": {
+    "flags": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "flag_position": {
+            "type": "integer",
+            "description": "The position of the flag, from 1 to 9",
+            "minimum": 1,
+            "maximum": 9
+          },
+          "player1_formation": {
+            "type": "object",
+            "description": "The formation of Troop cards for Player 1 at this flag",
+            "properties": {
+              "cards": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "color": {
+                      "type": "string",
+                      "enum": [
+                        "red",
+                        "blue",
+                        "green",
+                        "yellow",
+                        "black",
+                        "purple"
+                      ]
+                    },
+                    "value": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 10
+                    },
+                    "is_leader": {
+                      "type": "boolean",
+                      "description": "True if this card is a Leader Tactics card"
+                    },
+                    "is_companion_cavalry": {
+                      "type": "boolean",
+                      "description": "True if this card is a Companion Cavalry Tactics card"
+                    },
+                    "is_shield_bearers": {
+                      "type": "boolean",
+                      "description": "True if this card is a Shield Bearers Tactics card"
+                    }
+                  },
+                  "required": [
+                    "color",
+                    "value"
+                  ]
+                },
+                "maxItems": 3
+              },
+              "formation_type": {
+                "type": "string",
+                "enum": [
+                  "wedge",
+                  "phalanx",
+                  "battalion_order",
+                  "skirmish_line",
+                  "host",
+                  "none"
+                ],
+                "description": "The type of formation formed by the cards"
+              },
+              "formation_strength": {
+                "type": "integer",
+                "description": "The strength of the formation, calculated as the sum of card values"
+              }
+            },
+            "required": [
+              "cards",
+              "formation_type",
+              "formation_strength"
+            ]
+          },
+          "player2_formation": {
+            "type": "object",
+            "description": "The formation of Troop cards for Player 2 at this flag",
+            "properties": {
+              "cards": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "color": {
+                      "type": "string",
+                      "enum": [
+                        "red",
+                        "blue",
+                        "green",
+                        "yellow",
+                        "black",
+                        "purple"
+                      ]
+                    },
+                    "value": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 10
+                    },
+                    "is_leader": {
+                      "type": "boolean",
+                      "description": "True if this card is a Leader Tactics card"
+                    },
+                    "is_companion_cavalry": {
+                      "type": "boolean",
+                      "description": "True if this card is a Companion Cavalry Tactics card"
+                    },
+                    "is_shield_bearers": {
+                      "type": "boolean",
+                      "description": "True if this card is a Shield Bearers Tactics card"
+                    }
+                  },
+                  "required": [
+                    "color",
+                    "value"
+                  ]
+                },
+                "maxItems": 3
+              },
+              "formation_type": {
+                "type": "string",
+                "enum": [
+                  "wedge",
+                  "phalanx",
+                  "battalion_order",
+                  "skirmish_line",
+                  "host",
+                  "none"
+                ],
+                "description": "The type of formation formed by the cards"
+              },
+              "formation_strength": {
+                "type": "integer",
+                "description": "The strength of the formation, calculated as the sum of card values"
+              }
+            },
+            "required": [
+              "cards",
+              "formation_type",
+              "formation_strength"
+            ]
+          },
+          "environment_tactic": {
+            "type": "string",
+            "enum": [
+              "fog",
+              "mud",
+              "none"
+            ],
+            "description": "The Environment Tactics card played at this flag, if any"
+          },
+          "claimed_by": {
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              0
+            ],
+            "description": "The player who has claimed the flag (1 or 2), or 0 if unclaimed"
+          }
+        },
+        "required": [
+          "flag_position",
+          "player1_formation",
+          "player2_formation",
+          "environment_tactic",
+          "claimed_by"
+        ]
+      },
+      "maxItems": 9,
+      "minItems": 9
+    },
+    "player1_guile_tactics": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "scout",
+          "redeploy",
+          "deserter",
+          "traitor"
+        ]
+      },
+      "description": "Guile Tactics cards played by Player 1"
+    },
+    "player2_guile_tactics": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "scout",
+          "redeploy",
+          "deserter",
+          "traitor"
+        ]
+      },
+      "description": "Guile Tactics cards played by Player 2"
+    },
+    "player1_claimed_flags": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9
+      },
+      "description": "Array of flag positions claimed by Player 1"
+    },
+    "player2_claimed_flags": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9
+      },
+      "description": "Array of flag positions claimed by Player 2"
+    },
+    "current_turn": {
+      "type": "integer",
+      "enum": [
+        1,
+        2
+      ],
+      "description": "The player whose turn it is (1 or 2)"
+    },
+    "troop_deck_size": {
+      "type": "integer",
+      "description": "The number of cards remaining in the Troop deck",
+      "minimum": 0
+    },
+    "tactics_deck_size": {
+      "type": "integer",
+      "description": "The number of cards remaining in the Tactics deck",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "flags",
+    "player1_guile_tactics",
+    "player2_guile_tactics",
+    "player1_claimed_flags",
+    "player2_claimed_flags",
+    "current_turn",
+    "troop_deck_size",
+    "tactics_deck_size"
+  ]
+}
