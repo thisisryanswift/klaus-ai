@@ -209,7 +209,7 @@ app.post('/api/gemini-interaction', upload.fields([
     console.log(`Gemini file processing successful: ${getFile.name}, state: ${getFile.state}, uri: ${getFile.uri}`);
     // --- End New File Upload Logic ---
 
-    const promptText = "Evaluate the game state and the user's instructions, and return an updated JSON blob of what is going on in the game right now. Here is the user's instructions: " + req.body.userTTSInput + " and here is the required JSON schema for your output (do not deviate from this format or we will all die): " + req.body.responseFormat;
+    const promptText = "Evaluate the game state and the user's instructions, and return an updated JSON blob of what is going on in the game right now. Here is the user's instructions: " + " and here is the required JSON schema for your output (do not deviate from this format or we will all die): " + req.body.responseFormat;
     
     const apiContents = [
       { text: promptText }
@@ -257,10 +257,77 @@ app.post('/api/gemini-interaction', upload.fields([
 
     try {
         const parsedJsonResponse = JSON.parse(jsonString);
-        res.json({ response: parsedJsonResponse }); // Send the parsed JSON object
+        console.log('Successfully parsed first Gemini response:', parsedJsonResponse);
+
+        // --- Step 2: Generate Text Summary ---
+        console.log('Preparing to generate text summary...');
+        // TODO: You might want to customize this prompt further
+        const summaryPromptText = `Based on the following JSON representation of our game state: ${JSON.stringify(parsedJsonResponse, null, 2)}, please provide a concise one sentence strategic recommendation based on the player's request (note that the player you are providing advice for is always on the bottom of the image): ${req.body.ttsContents}`;
+        console.log('Text summary prompt:', summaryPromptText);
+
+        console.log('Calling Gemini to generate text summary...');
+        const summaryResponse = await ai.models.generateContent({
+            model: "gemini-2.5-flash-preview-05-20", // Model for text generation
+            contents: summaryPromptText,
+            config: {
+            systemInstruction: req.body.systemPrompt }
+        });
+        console.log('Gemini text summary generation successful.');
+
+        const generatedSummaryText = "Say cheerfully: " + summaryResponse.text;
+        console.log('Generated text summary:', generatedSummaryText);
+
+        if (!generatedSummaryText) {
+            console.error('Gemini did not return text for the summary.');
+            return res.status(500).json({ error: 'Failed to generate text summary from Gemini.' });
+        }
+
+        // --- Step 3: Generate Audio from Text Summary (TTS) ---
+        console.log('Preparing to generate audio (TTS) for the summary...');
+        
+        const ttsModel = "gemini-2.5-flash-preview-tts"; // TTS specific model from example
+        const ttsContents = [{ parts: [{ text: generatedSummaryText }] }]; // Text to convert to speech
+        const ttsGenerationConfig = {
+            responseModalities: ['AUDIO'], // Requesting only audio output
+            speechConfig: {
+                voiceConfig: {
+                    // Using 'Kore' voice from example, you can choose others
+                    prebuiltVoiceConfig: { voiceName: 'Kore' },
+                },
+            },
+        };
+        // System instruction might not be strictly necessary for TTS, but can be included
+        // const ttsSystemInstruction = { parts: [{ text: "Synthesize this text clearly." }] };
+
+
+        console.log(`Calling Gemini TTS model ('${ttsModel}') to generate audio...`);
+        const ttsResponse = await ai.models.generateContent({
+            model: ttsModel,
+            contents: ttsContents,
+            config: ttsGenerationConfig,
+            // systemInstruction: ttsSystemInstruction // Optional for TTS
+        });
+        console.log('Gemini TTS call successful.');
+
+        const audioDataPart = ttsResponse.candidates?.[0]?.content?.parts?.[0];
+        if (!audioDataPart || !audioDataPart.inlineData || !audioDataPart.inlineData.data) {
+            console.error('Gemini TTS response did not contain audio data:', ttsResponse);
+            return res.status(500).json({ error: 'Failed to retrieve audio data from Gemini TTS response.' });
+        }
+        
+        const base64AudioData = audioDataPart.inlineData.data;
+        console.log('Successfully retrieved base64 audio data.');
+        // const audioBuffer = Buffer.from(base64AudioData, 'base64'); // If you need the buffer
+
+        // Send both text summary and base64 audio data
+        res.json({
+            textResponse: generatedSummaryText,
+            audioResponse: base64AudioData // This is the base64 string
+        });
+
     } catch (parseError) {
         console.error('Failed to parse cleaned Gemini response as JSON. Error:', parseError.message);
-        console.error('Original Gemini text:', rawText);
+        console.error('Original Gemini text:', rawText); // rawText is from the first call, ensure context
         console.error('Attempted to parse (after cleaning):', jsonString);
         // Send a more informative error response to the client
         res.status(500).json({

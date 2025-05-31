@@ -16,6 +16,7 @@
     "express": "^5.1.0",
     "form-data": "^4.0.2",
     "multer": "^2.0.0",
-    "node-fetch": "^2.7.0"
+    "node-fetch": "^2.7.0",
+    "wav": "^1.0.2"
   }
 }
