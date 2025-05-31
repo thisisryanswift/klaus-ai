@@ -336,6 +336,7 @@ app.post(
         config: {
           responseMimeType: "application/json",
           systemInstruction: req.body.systemPrompt,
+          temperature: 0
         },
       };
       //console.log('Gemini JSON: ', JSON.stringify(geminijson));
@@ -380,11 +381,12 @@ app.post(
           contents: summaryPromptText,
           config: {
             systemInstruction: req.body.systemPrompt,
+            temperature: 0
           },
         });
         console.log("Gemini text summary generation successful.");
 
-        const generatedSummaryText = "Say cheerfully: " + summaryResponse.text;
+        const generatedSummaryText = "You are talking like Gordon Ramsey in Kitchen Nightmares. Say the following text in that style: " + summaryResponse.text;
         console.log("Generated text summary:", generatedSummaryText);
 
         if (!generatedSummaryText) {
@@ -400,11 +402,12 @@ app.post(
         const ttsModel = "gemini-2.5-flash-preview-tts"; // TTS specific model from example
         const ttsContents = [{ parts: [{ text: generatedSummaryText }] }]; // Text to convert to speech
         const ttsGenerationConfig = {
+            temperature: 0,
           responseModalities: ["AUDIO"], // Requesting only audio output
           speechConfig: {
             voiceConfig: {
               // Using 'Kore' voice from example, you can choose others
-              prebuiltVoiceConfig: { voiceName: "Kore" },
+              prebuiltVoiceConfig: { voiceName: "Alnilam" },
             },
           },
         };
