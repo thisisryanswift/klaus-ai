@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini API Interaction</title>
+    <style>
+        body { 
+            font-family: sans-serif; 
+            margin: 20px; 
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        form > div { 
+            margin-bottom: 15px; 
+        }
+        label { 
+            display: block; 
+            margin-bottom: 5px; 
+            font-weight: bold; 
+        }
+        input[type="file"], textarea, button { 
+            padding: 8px; 
+            width: 100%; 
+            box-sizing: border-box; 
+            border-radius: 4px; 
+            border: 1px solid #ccc; 
+        }
+        textarea { 
+            resize: vertical; 
+        }
+        button { 
+            background-color: #007bff; 
+            color: white; 
+            cursor: pointer; 
+            padding: 10px;
+            font-size: 16px;
+        }
+        button:hover { 
+            background-color: #0056b3; 
+        }
+        #responseArea { 
+            margin-top: 20px; 
+            padding: 10px; 
+            border: 1px solid #eee; 
+            background-color: #f9f9f9; 
+            white-space: pre-wrap; 
+            word-wrap: break-word; 
+            min-height: 100px;
+        }
+        .response-container {
+            margin-top: 30px;
+        }
+        .response-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Gemini API Interaction</h1>
+    
+    <form id="geminiForm">
+        <div>
+            <label for="imageFile">Image File:</label>
+            <input type="file" name="imageFile" id="imageFile" accept="image/*" required>
+        </div>
+        
+        <div>
+            <label for="responseFormat">Response Format (JSON):</label>
+            <textarea name="responseFormat" id="responseFormat" rows="10" cols="50" required>{
+  "type": "OBJECT",
+  "properties": {
+    "description": { "type": "STRING" },
+    "items_identified": {
+      "type": "ARRAY",
+      "items": { "type": "STRING" }
+    }
+  }
+}</textarea>
+        </div>
+        
+        <div>
+            <label for="systemPrompt">System Prompt:</label>
+            <textarea name="systemPrompt" id="systemPrompt" rows="5" cols="50" required>You are an AI assistant that analyzes images and provides detailed descriptions.</textarea>
+        </div>
+        
+        <div>
+            <label for="userTTSInput">User Input:</label>
+            <textarea name="userTTSInput" id="userTTSInput" rows="5" cols="50" required>Describe this image in detail and list all items you can identify in it.</textarea>
+        </div>
+        
+        <div>
+            <button type="submit">Send to Gemini</button>
+        </div>
+    </form>
+    
+    <div class="response-container">
+        <div class="response-title">Response:</div>
+        <pre id="responseArea">Response will appear here after submission.</pre>
+    </div>
+
+    <script>
+        document.getElementById('geminiForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            
+            // Show loading state
+            const responseArea = document.getElementById('responseArea');
+            responseArea.textContent = 'Processing request...';
+            
+            // Get form data
+            const formData = new FormData(this);
+            
+            // Send request to the server
+            fetch('/api/gemini-interaction', {
+                method: 'POST',
+                body: formData // FormData handles multipart/form-data encoding
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        throw new Error(err.error || 'Server error');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Display the successful response
+                responseArea.textContent = JSON.stringify(data, null, 2);
+            })
+            .catch(error => {
+                // Display errors
+                console.error('Error:', error);
+                responseArea.textContent = 'Error: ' + error.toString();
+            });
+        });
+    </script>
+</body>
+</html>

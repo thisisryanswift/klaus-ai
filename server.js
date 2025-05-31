@@ -5,6 +5,7 @@ const multer = require('multer');
 const fs = require('fs').promises;
 const os = require('os');
 const { LangflowClient } = require('@datastax/langflow-client');
+const { GoogleGenAI, Type, createPartFromUri } = require("@google/genai");
 
 // Load environment variables from .env file
 dotenv.config();
@@ -141,6 +142,150 @@ app.post('/api/upload', upload.single('uploadedFile'), async (req, res) => {
             }
         }
     }
+});
+
+// Gemini API interaction endpoint
+app.post('/api/gemini-interaction', upload.fields([
+  { name: 'imageFile', maxCount: 1 },
+  { name: 'responseFormat', maxCount: 1 },
+  { name: 'systemPrompt', maxCount: 1 },
+  { name: 'userTTSInput', maxCount: 1 }
+]), async (req, res) => {
+  // Check if required fields are present
+  if (!req.files || !req.files.imageFile || !req.files.imageFile[0]) {
+    return res.status(400).json({ error: 'No image file uploaded.' });
+  }
+
+  if (!req.body.responseFormat) {
+    return res.status(400).json({ error: 'Response format is required.' });
+  }
+
+  if (!req.body.systemPrompt) {
+    return res.status(400).json({ error: 'System prompt is required.' });
+  }
+
+  if (!req.body.userTTSInput) {
+    return res.status(400).json({ error: 'User input is required.' });
+  }
+
+  try {
+    // Initialize the Google GenAI client
+    const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY, vertexai: false }); // Use 'ai' and initialize as per example style
+
+    // Parse the response format JSON string
+    const parsedResponseFormat = JSON.parse(req.body.responseFormat);
+
+    // Helper function to map schema types to Type enum members
+    function mapSchemaTypes(schemaPart) {
+      if (typeof schemaPart !== 'object' || schemaPart === null) return schemaPart;
+      
+      const newSchemaPart = { ...schemaPart };
+      
+      // Convert enum values to strings if they are numbers
+      if (Array.isArray(newSchemaPart.enum)) {
+        newSchemaPart.enum = newSchemaPart.enum.map(value =>
+          typeof value === 'number' ? String(value) : value
+        );
+        // If enum is present, API requires the type to be STRING
+        newSchemaPart.type = Type.STRING;
+      }
+      
+      // Only map type if it's a string and not already set by enum logic
+      if (typeof newSchemaPart.type === 'string' && !Array.isArray(newSchemaPart.enum)) {
+        const typeEnum = Type[newSchemaPart.type.toUpperCase()];
+        if (typeEnum !== undefined) newSchemaPart.type = typeEnum;
+        else console.warn('Unknown schema type:', newSchemaPart.type);
+      }
+      
+      if (newSchemaPart.items) newSchemaPart.items = mapSchemaTypes(newSchemaPart.items);
+      
+      if (newSchemaPart.properties) {
+        for (const key in newSchemaPart.properties) {
+          newSchemaPart.properties[key] = mapSchemaTypes(newSchemaPart.properties[key]);
+        }
+      }
+      
+      return newSchemaPart;
+    }
+
+    // Apply the mapping to convert string types to Type enum members
+    const finalResponseSchema = mapSchemaTypes(parsedResponseFormat);
+
+    // --- New File Upload Logic based on example ---
+    const imageFile = req.files.imageFile[0];
+    // Assuming Blob is available globally in your Node.js environment (Node.js >= v18.0.0 or v15.7.0+ with require('buffer').Blob)
+    // If not, you might need: const { Blob } = require('buffer');
+    const imageFileBlob = new Blob([imageFile.buffer], { type: imageFile.mimetype });
+
+    console.log(`Uploading file to Gemini: ${imageFile.originalname}, type: ${imageFile.mimetype}`);
+    // Upload the file.
+    const uploadedFile = await ai.files.upload({
+      file: imageFileBlob,
+      config: { // This 'config' is for ai.files.upload
+        displayName: imageFile.originalname,
+      },
+    });
+    console.log(`Gemini file uploaded, name: ${uploadedFile.name}, uri: ${uploadedFile.uri}`);
+
+    // Wait for the file to be processed.
+    let getFile = await ai.files.get({ name: uploadedFile.name });
+    console.log(`Initial Gemini file status: ${getFile.state}`);
+    while (getFile.state === 'PROCESSING') {
+      console.log('Gemini file is still processing, retrying in 5 seconds...');
+      await new Promise(resolve => setTimeout(resolve, 5000)); // Non-blocking delay
+      getFile = await ai.files.get({ name: uploadedFile.name });
+      console.log(`Current Gemini file status: ${getFile.state}`);
+    }
+
+    if (getFile.state === 'FAILED') {
+      console.error('Gemini file processing failed:', getFile);
+      return res.status(500).json({ error: 'Gemini file processing failed.', details: getFile });
+    }
+    if (getFile.state !== 'ACTIVE') { // Ensure file is active for use
+        console.error(`Gemini file processing finished with unexpected state: ${getFile.state}`, getFile);
+        return res.status(500).json({ error: `Gemini file processing finished with unexpected state: ${getFile.state}`, details: getFile });
+    }
+    console.log(`Gemini file processing successful: ${getFile.name}, state: ${getFile.state}, uri: ${getFile.uri}`);
+    // --- End New File Upload Logic ---
+
+    const promptText = "Evaluate the game state and the user's instructions, and return an updated JSON blob of what is going on in the game right now. Here is the user's instructions: " + req.body.userTTSInput;
+    
+    const apiContents = [
+      { text: promptText }
+    ];
+
+    if (getFile.uri && getFile.mimeType) {
+      const filePart = createPartFromUri(getFile.uri, getFile.mimeType);
+      apiContents.push(filePart);
+    } else {
+      console.error('Gemini file URI or mimeType not available after processing. Cannot add to Gemini content.');
+      return res.status(500).json({ error: 'File URI or mimeType not available after Gemini processing.' });
+    }
+    
+    const geminiResponse = await ai.models.generateContent({
+      model: "gemini-2.5-pro-preview-05-06",
+      contents: apiContents,
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: finalResponseSchema,
+      },
+      systemInstruction: { parts: [{ text: req.body.systemPrompt }] }
+    });
+    
+    // Send the response back to the client
+    res.json({ response: geminiResponse.text });
+    
+  } catch (error) {
+    console.error('Error processing Gemini API request:', error.message);
+    
+    // Log the full error object for debugging
+    console.error('Full error object:', error);
+    
+    res.status(500).json({
+      error: 'Internal server error during Gemini API processing.',
+      details: error.message
+    });
+  }
 });
 
 // Start server
