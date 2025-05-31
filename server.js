@@ -57,21 +57,26 @@ app.post('/api/upload', upload.single('uploadedFile'), async (req, res) => {
                 baseUrl: langflowLocalBaseUrl,
                 apiKey: langflowApiKey
             });
+            console.log(`LangflowClient initialized for CLOUD: baseUrl=${langflowLocalBaseUrl}, apiKey=****${langflowApiKey.slice(-4)}`);
         } else {
             // Local setup, no API key
             client = new LangflowClient({
                 baseUrl: langflowLocalBaseUrl
                 // apiKey is intentionally omitted
             });
+            console.log(`LangflowClient initialized for LOCAL: baseUrl=${langflowLocalBaseUrl}`);
         }
         
         // Step 1: Upload file to Langflow using the client library
         const flow = client.flow(flowId);
+        console.log(`Flow instance created with flowId='${flowId}'`);
 
+        console.log(`Attempting file upload: flowId='${flowId}', tempFilePath='${tempFilePath}'`);
         const uploadResult = await flow.uploadFile(tempFilePath);
         
         // Extract the file path from the upload result
         const langflowFilePath = uploadResult.filePath;
+        console.log(`File upload successful, langflowFilePath: '${langflowFilePath}'`);
         
         if (!langflowFilePath) {
             console.error('Langflow file upload response missing path:', uploadResult);
@@ -93,13 +98,38 @@ app.post('/api/upload', upload.single('uploadedFile'), async (req, res) => {
         };
         
         // Run the flow using the client library
-        const runResult = flow.run(inputValue, options);
+        console.log(`Attempting flow run: flowId='${flowId}', inputValue='${inputValue}', options:`, JSON.stringify(options, null, 2));
+        const runResult = await flow.run(inputValue, options);
         
         // Return the result to the client
         res.json(runResult);
 
     } catch (error) {
-        console.error('Error processing file upload:', error);
+        console.error('Error processing file upload:', error.message);
+        
+        // Enhanced error logging to extract more details from the API response
+        if (error.cause && typeof error.cause.json === 'function') {
+            try {
+                const errorDetails = await error.cause.json();
+                console.error('Langflow API Error Details (JSON):', JSON.stringify(errorDetails, null, 2));
+            } catch (jsonError) {
+                console.error('Failed to parse error cause as JSON:', jsonError);
+                if (typeof error.cause.text === 'function') {
+                    try {
+                        const errorText = await error.cause.text();
+                        console.error('Langflow API Error Details (Text):', errorText);
+                    } catch (textError) {
+                        console.error('Failed to get error cause as text:', textError);
+                    }
+                }
+            }
+        } else if (error.cause) {
+            console.error('Langflow API Error Cause:', error.cause);
+        }
+        
+        // Log the full error object for debugging
+        console.error('Full error object:', error);
+        
         res.status(500).json({ error: 'Internal server error during file processing.', details: error.message });
     } finally {
         // Clean up the temporary file if it was created
