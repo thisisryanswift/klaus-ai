@@ -371,7 +371,7 @@ app.post(
         config: {
           responseMimeType: "application/json",
           systemInstruction: "IMPORTANT NOTE: WE ARE PLAYING A MODIFIED VERSION OF THE GAME WITH ONLY 3 FLAGS, NOT THE NORMAL 9. ALL OTHER RULES ARE THE SAME." + req.body.systemPrompt,
-          temperature: 0
+          temperature: parseFloat(process.env.TEMPERATURE)
         },
       };
       //console.log('Gemini JSON: ', JSON.stringify(geminijson));
@@ -416,7 +416,7 @@ app.post(
           contents: summaryPromptText,
           config: {
             systemInstruction: req.body.systemPrompt,
-            temperature: 0
+            temperature: parseFloat(process.env.TEMPERATURE)
           },
         });
         console.log("Gemini text summary generation successful.");
@@ -437,7 +437,7 @@ app.post(
         const ttsModel = "gemini-2.5-flash-preview-tts"; // TTS specific model from example
         const ttsContents = [{ parts: [{ text: generatedSummaryText }] }]; // Text to convert to speech
         const ttsGenerationConfig = {
-            temperature: 0,
+            temperature: parseFloat(process.env.TEMPERATURE),
           responseModalities: ["AUDIO"], // Requesting only audio output
           speechConfig: {
             voiceConfig: {
