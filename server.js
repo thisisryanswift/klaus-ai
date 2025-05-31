@@ -33,11 +33,7 @@ app.post('/api/upload', upload.single('uploadedFile'), async (req, res) => {
     }
 
     const langflowApiKey = process.env.LANGFLOW_KEY;
-    if (!langflowApiKey) {
-        return res.status(500).json({ error: 'Langflow API key not configured.' });
-    }
-
-    const langflowBaseUrl = process.env.LANGFLOW_BASE_URL;
+    const langflowLocalBaseUrl = process.env.LANGFLOW_LOCAL_BASE_URL || 'http://localhost:7860';
     const flowId = process.env.FLOW_ID;
     const componentIdForFilePath = process.env.LANGFLOW_FILE_COMPONENT;
 
@@ -52,17 +48,27 @@ app.post('/api/upload', upload.single('uploadedFile'), async (req, res) => {
         // Write the buffer to a temporary file
         await fs.writeFile(tempFilePath, req.file.buffer);
         
-        // Extract langflowId from the baseUrl
-        const langflowId = process.env.LANGFLOW_ID;
-        
-        // Initialize the LangflowClient
-        const client = new LangflowClient({
-            langflowId,
-            apiKey: langflowApiKey
-        });
+        // Initialize the LangflowClient based on whether we have an API key
+        let client;
+
+        if (langflowApiKey) {
+            // Hosted setup with API key
+            client = new LangflowClient({
+                baseUrl: langflowLocalBaseUrl,
+                apiKey: langflowApiKey
+            });
+        } else {
+            // Local setup, no API key
+            client = new LangflowClient({
+                baseUrl: langflowLocalBaseUrl
+                // apiKey is intentionally omitted
+            });
+        }
         
         // Step 1: Upload file to Langflow using the client library
-        const uploadResult = await client.flow(flowId).uploadFile(tempFilePath);
+        const flow = client.flow(flowId);
+
+        const uploadResult = await flow.uploadFile(tempFilePath);
         
         // Extract the file path from the upload result
         const langflowFilePath = uploadResult.filePath;
@@ -87,7 +93,7 @@ app.post('/api/upload', upload.single('uploadedFile'), async (req, res) => {
         };
         
         // Run the flow using the client library
-        const runResult = await client.flow(flowId).run(inputValue, options);
+        const runResult = flow.run(inputValue, options);
         
         // Return the result to the client
         res.json(runResult);
