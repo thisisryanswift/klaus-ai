@@ -507,7 +507,7 @@ app.post(
 
         // Send text summary and the URL to the audio file (or null if saving failed)
         res.json({
-          textResponse: generatedSummaryText,
+          textResponse: summaryResponse.text,
           audioUrl: audioUrl,
         });
       } catch (parseError) {
