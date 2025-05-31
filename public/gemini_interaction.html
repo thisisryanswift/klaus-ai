@@ -105,7 +105,25 @@
         <pre id="responseArea">Response will appear here after submission.</pre>
     </div>
 
+    <div class="audio-player-container" style="margin-top: 20px;">
+        <div class="response-title">Audio Player:</div>
+        <audio id="geminiAudioPlayer" controls>
+            Your browser does not support the audio element.
+        </audio>
+    </div>
+
     <script>
+        function playAudioFromUrl(audioUrl) {
+            const audioPlayer = document.getElementById('geminiAudioPlayer');
+            if (audioPlayer) {
+                audioPlayer.src = audioUrl;
+                audioPlayer.load();
+                audioPlayer.play().catch(error => console.error("Error playing audio:", error));
+            } else {
+                console.error('Audio player element with id "geminiAudioPlayer" not found.');
+            }
+        }
+
         document.getElementById('geminiForm').addEventListener('submit', function(event) {
             event.preventDefault();
             
@@ -132,6 +150,11 @@
             .then(data => {
                 // Display the successful response
                 responseArea.textContent = JSON.stringify(data, null, 2);
+
+                // Check for audioUrl and play audio if available
+                if (data.audioUrl) {
+                    playAudioFromUrl(data.audioUrl);
+                }
             })
             .catch(error => {
                 // Display errors

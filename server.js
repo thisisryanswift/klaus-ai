@@ -224,9 +224,9 @@ app.post('/api/gemini-interaction', upload.fields([
     }
 
     console.log('Preparing to call Gemini for content generation...');
-    console.log('API Contents:', JSON.stringify(apiContents, null, 2));
+   // console.log('API Contents:', JSON.stringify(apiContents, null, 2));
 
-    console.log('System Instruction:', JSON.stringify({ parts: [{ text: req.body.systemPrompt }] }, null, 2));
+   // console.log('System Instruction:', JSON.stringify({ parts: [{ text: req.body.systemPrompt }] }, null, 2));
     
     console.log('Calling Gemini generateContent...');
     const geminijson = {
@@ -235,13 +235,13 @@ app.post('/api/gemini-interaction', upload.fields([
       config: {responseMimeType: "application/json",
    systemInstruction: req.body.systemPrompt  }
     };
-    console.log('Gemini JSON: ', JSON.stringify(geminijson));
+    //console.log('Gemini JSON: ', JSON.stringify(geminijson));
     const geminiResponse = await ai.models.generateContent(geminijson);
     console.log('Gemini generateContent call successful.');
     
     // Send the response back to the client
     const rawText = geminiResponse.text; // Correctly call text() as a method
-    console.log('Raw response from Gemini:', rawText);
+   // console.log('Raw response from Gemini for game state:', rawText);
     let jsonString = rawText;
 
     // Attempt to remove markdown JSON code block fences.
@@ -257,7 +257,7 @@ app.post('/api/gemini-interaction', upload.fields([
 
     try {
         const parsedJsonResponse = JSON.parse(jsonString);
-        console.log('Successfully parsed first Gemini response:', parsedJsonResponse);
+       // console.log('Successfully parsed first Gemini response:', parsedJsonResponse);
 
         // --- Step 2: Generate Text Summary ---
         console.log('Preparing to generate text summary...');
@@ -317,12 +317,33 @@ app.post('/api/gemini-interaction', upload.fields([
         
         const base64AudioData = audioDataPart.inlineData.data;
         console.log('Successfully retrieved base64 audio data.');
-        // const audioBuffer = Buffer.from(base64AudioData, 'base64'); // If you need the buffer
+        // const audioBuffer = Buffer.from(base64AudioData, 'base64'); // Original comment
 
-        // Send both text summary and base64 audio data
+        let audioUrl = null;
+        if (base64AudioData) {
+            try {
+                const audioDir = path.join(__dirname, 'public', 'audio');
+                // Ensure 'public/audio' directory exists. fs.mkdir with recursive:true is idempotent.
+                await fs.mkdir(audioDir, { recursive: true });
+                console.log(`Ensured directory exists or was created: ${audioDir}`);
+
+                const audioFileName = `gemini_output_${Date.now()}.wav`;
+                const audioFilePath = path.join(audioDir, audioFileName);
+                const decodedAudioBuffer = Buffer.from(base64AudioData, 'base64');
+
+                await fs.writeFile(audioFilePath, decodedAudioBuffer);
+                console.log(`Audio file saved successfully: ${audioFilePath}`);
+                audioUrl = `/audio/${audioFileName}`; // Relative URL for client access via express.static
+            } catch (fileError) {
+                console.error('Error saving audio file:', fileError.message);
+                // audioUrl will remain null, and the client should handle cases where audioUrl is not provided.
+            }
+        }
+
+        // Send text summary and the URL to the audio file (or null if saving failed)
         res.json({
             textResponse: generatedSummaryText,
-            audioResponse: base64AudioData // This is the base64 string
+            audioUrl: audioUrl
         });
 
     } catch (parseError) {
