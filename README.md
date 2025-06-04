@@ -67,4 +67,4 @@ A unique aspect of Klaus.AI's development was the extensive use of AI for code g
 
 ## Acknowledgements
 
-This project was built as part of the [Hacking Agents Hackathon NYC](https://lu.ma/hacking-agents-hackathon-nyc) (May 2024) and we thank the hosts: DataStax Langflow, DigitalOcean, Torc.dev, TwelveLabs, and Twilio.
+This project was built as part of the [Hacking Agents Hackathon NYC](https://lu.ma/hacking-agents-hackathon-nyc) (May 2025) and we thank the hosts: DataStax Langflow, DigitalOcean, Torc.dev, TwelveLabs, and Twilio.
